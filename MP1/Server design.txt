@@ -1,0 +1,29 @@
+Server program:
+Set up data structures
+	vector of clients
+	vector of chatrooms
+Set up sockets
+Set up FDSets
+	cmd fdset
+	vector of fdsets
+
+Loop forever
+	select cmd fd
+	for all cmd fds
+		handle new connections
+		handle commands
+			if creating a new chat room, create a new one on the main port
+			if one is already on the main port, create one on the derived port
+	for all chats
+		select chat fd
+		for all chat fds
+			handle new connections
+				add to clients and increment the member variable
+			handle chat messages
+				if we got nothing, close the connection, remove the client
+				if we get a new chat, send it to all the clients
+			
+			
+		
+ 
+	
