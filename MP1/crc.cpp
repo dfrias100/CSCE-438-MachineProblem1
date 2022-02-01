@@ -1,3 +1,5 @@
+#include <arpa/inet.h>
+#include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <unistd.h>
@@ -10,9 +12,6 @@
 #include "interface.h"
 
 
-/*
- * TODO: IMPLEMENT BELOW THREE FUNCTIONS
- */
 int connect_to(const char *host, const int port);
 struct Reply process_command(const int sockfd, char* command);
 void process_chatmode(const char* host, const int port);
@@ -38,8 +37,9 @@ int main(int argc, char** argv)
 		display_reply(command, reply);
 		
 		touppercase(command, strlen(command) - 1);
-		if (strncmp(command, "JOIN", 4) == 0) {
+		if (strncmp(command, "JOIN", 4) == 0 && reply.status == SUCCESS) {
 			printf("Now you are in the chatmode\n");
+			close(sockfd);
 			process_chatmode(argv[1], reply.port);
 		}
 	
@@ -70,7 +70,30 @@ int connect_to(const char *host, const int port)
 	// ------------------------------------------------------------
 
     // below is just dummy code for compilation, remove it.
-	int sockfd = -1;
+	struct sockaddr_in sin;
+	
+    memset(&sin, 0, sizeof(sin)); // Filling the entire struct to 0
+    sin.sin_family = AF_INET;
+
+    sin.sin_port = htons(port); 
+    
+    if (struct hostent* phe = gethostbyname(host)) {
+        
+        memcpy(&sin.sin_addr, phe->h_addr, phe->h_length); 
+    	
+    } else if ((sin.sin_addr.s_addr = inet_addr(host)) == INADDR_NONE) {
+        exit(1);
+    }
+    
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0) { 
+        exit(1);
+    }
+
+    if (connect(sockfd, (struct sockaddr*)&sin, sizeof(sin)) < 0) {
+        exit(1);
+    }
+
 	return sockfd;
 }
 
@@ -103,14 +126,35 @@ struct Reply process_command(const int sockfd, char* command)
 	// 
 	// - CREATE/DELETE/JOIN and "<name>" are separated by one space.
 	// ------------------------------------------------------------
-
+	
+	/* 
+	   The server will parse the command, but the client will make sure
+	   the command part is uppercase
+	*/
+	
+	char tokenizedCommand[MAX_DATA];
+	strncpy(tokenizedCommand, command, MAX_DATA);
+	char* token = strtok(tokenizedCommand, " ");
+	
+	switch(strlen(token)) {
+		case 6:
+			for (int i = 0; i < 6; i++)
+				command[i] = toupper((unsigned char) command[i]);
+			break;
+		case 4:
+			for (int i = 0; i < 4; i++)
+				command[i] = toupper((unsigned char) command[i]);
+			break;
+		default:
+			break;
+	}
 
 	// ------------------------------------------------------------
 	// GUIDE 2:
 	// After you create the message, you need to send it to the
 	// server and receive a result from the server.
 	// ------------------------------------------------------------
-
+	send(sockfd, command, MAX_DATA, 0);
 
 	// ------------------------------------------------------------
 	// GUIDE 3:
@@ -153,12 +197,11 @@ struct Reply process_command(const int sockfd, char* command)
     // "list" is a string that contains a list of chat rooms such 
     // as "r1,r2,r3,"
 	// ------------------------------------------------------------
-
-	// REMOVE below code and write your own Reply.
 	struct Reply reply;
-	reply.status = SUCCESS;
-	reply.num_member = 5;
-	reply.port = 1024;
+	if(recv(sockfd, &reply, sizeof(reply), 0) <= 0) {
+		reply.status = FAILURE_UNKNOWN;
+	}
+	
 	return reply;
 }
 
@@ -176,7 +219,8 @@ void process_chatmode(const char* host, const int port)
 	// to the server using host and port.
 	// You may re-use the function "connect_to".
 	// ------------------------------------------------------------
-
+	int chatroom_socket = connect_to(host, port);
+	
 	// ------------------------------------------------------------
 	// GUIDE 2:
 	// Once the client have been connected to the server, we need
@@ -184,6 +228,10 @@ void process_chatmode(const char* host, const int port)
 	// At the same time, the client should wait for a message from
 	// the server.
 	// ------------------------------------------------------------
+	fd_set room;
+	FD_ZERO(&room);
+	FD_SET(STDIN_FILENO, &room);
+	FD_SET(chatroom_socket, &room);
 	
     // ------------------------------------------------------------
     // IMPORTANT NOTICE:
@@ -199,5 +247,27 @@ void process_chatmode(const char* host, const int port)
     //    Don't have to worry about this situation, and you can 
     //    terminate the client program by pressing CTRL-C (SIGINT)
 	// ------------------------------------------------------------
+	
+	while (1) {
+		fd_set active_read_set = room;
+		fflush(stdout);
+    	select(chatroom_socket + 1, &active_read_set, NULL, NULL, NULL);
+    	
+		if (FD_ISSET(chatroom_socket, &active_read_set)) {
+			char incomingMessage[MAX_DATA];
+			if (recv(chatroom_socket, incomingMessage, MAX_DATA, 0) == 0) {
+				// Server closed connection, the server will send the kill message
+				display_title();
+				return;
+			}
+			display_message(incomingMessage);
+		}
+	
+		if (FD_ISSET(STDIN_FILENO, &active_read_set)) {
+			char message[MAX_DATA];
+			get_message(message, MAX_DATA);
+			send(chatroom_socket, message, MAX_DATA, 0);
+		}
+	}
 }
 
