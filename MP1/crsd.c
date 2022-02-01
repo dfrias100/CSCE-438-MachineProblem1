@@ -48,18 +48,18 @@ struct CString {
 
 int CreateListener(int& port_offset) {
     // Set up the master chat listening socket, this will monitor the chat that it is assigned to
-	int port_listener = CHATROOM_BASE_PORT + port_offset;
-	int listener = socket(AF_INET, SOCK_STREAM, 0);
-	
-	
-	if (listener < 0) {
-	    fprintf(stderr, "Could not create socket. Exiting.\n");
-	    exit(1);
-	}
-	
-	// This struct will hold our IP address to bind the listener
-	// socket to
-	struct sockaddr_in sin;
+    int port_listener = CHATROOM_BASE_PORT + port_offset;
+    int listener = socket(AF_INET, SOCK_STREAM, 0);
+    
+    
+    if (listener < 0) {
+        fprintf(stderr, "Could not create socket. Exiting.\n");
+        exit(1);
+    }
+    
+    // This struct will hold our IP address to bind the listener
+    // socket to
+    struct sockaddr_in sin;
     memset(&sin, 0, sizeof(sin));
     sin.sin_family = AF_INET;
     sin.sin_addr.s_addr = htonl(INADDR_ANY);
