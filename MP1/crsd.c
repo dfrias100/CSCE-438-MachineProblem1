@@ -82,29 +82,29 @@ int CreateListener(int& port_offset) {
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {
-		fprintf(stderr,
-				"usage: enter port number\n");
-		exit(1);
-	}
+        fprintf(stderr,
+        		"usage: enter port number\n");
+        exit(1);
+    }
 	
-	int port_offset = 0;
-	
-	// This will hold our chat structs, the STL vector will make handling deletes *a lot* easier
-	std::vector<struct Chatroom> chats;
-	
-	// Set up the listening socket, this will monitor the commands
-	int port_listener = atoi(argv[1]);
-	int listener = socket(AF_INET, SOCK_STREAM, 0);
-	
-	
-	if (listener < 0) {
-	    fprintf(stderr, "Could not create socket. Exiting.\n");
-	    exit(1);
-	}
-	
-	// This struct will hold our IP address to bind the listener
-	// socket to
-	struct sockaddr_in sin;
+    int port_offset = 0;
+    
+    // This will hold our chat structs, the STL vector will make handling deletes *a lot* easier
+    std::vector<struct Chatroom> chats;
+    
+    // Set up the listening socket, this will monitor the commands
+    int port_listener = atoi(argv[1]);
+    int listener = socket(AF_INET, SOCK_STREAM, 0);
+    
+    
+    if (listener < 0) {
+        fprintf(stderr, "Could not create socket. Exiting.\n");
+        exit(1);
+    }
+    
+    // This struct will hold our IP address to bind the listener
+    // socket to
+    struct sockaddr_in sin;
     memset(&sin, 0, sizeof(sin));
     sin.sin_family = AF_INET;
     sin.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -119,8 +119,7 @@ int main(int argc, char* argv[]) {
     if (listen(listener, 128) < 0) {
         fprintf(stderr, "Could not listen on this socket. Exiting.\n");
         exit(1);
-    }
-
+    }   
     // This fdset will monitor the command processing side of the server
     fd_set client_cmd_set;
     FD_ZERO(&client_cmd_set);
