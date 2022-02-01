@@ -69,14 +69,15 @@ int connect_to(const char *host, const int port)
 	// so that other functions such as "process_command" can use it
 	// ------------------------------------------------------------
 
-    // below is just dummy code for compilation, remove it.
+	// Creating a sock address struct
 	struct sockaddr_in sin;
 	
+	// Setting the details of the structs
     memset(&sin, 0, sizeof(sin)); // Filling the entire struct to 0
     sin.sin_family = AF_INET;
-
     sin.sin_port = htons(port); 
     
+    // Finding the host name and copying it into the struct
     if (struct hostent* phe = gethostbyname(host)) {
         
         memcpy(&sin.sin_addr, phe->h_addr, phe->h_length); 
@@ -85,11 +86,13 @@ int connect_to(const char *host, const int port)
         exit(1);
     }
     
+    // Creating the actual socket
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) { 
         exit(1);
     }
 
+	// Now, we connect to the server
     if (connect(sockfd, (struct sockaddr*)&sin, sizeof(sin)) < 0) {
         exit(1);
     }
@@ -133,9 +136,10 @@ struct Reply process_command(const int sockfd, char* command)
 	*/
 	
 	char tokenizedCommand[MAX_DATA];
-	strncpy(tokenizedCommand, command, MAX_DATA);
-	char* token = strtok(tokenizedCommand, " ");
+	strncpy(tokenizedCommand, command, MAX_DATA); // strtok modifies command, so we'll just copy it to a temp variable
+	char* token = strtok(tokenizedCommand, " "); // We just want the first part of the command
 	
+	// This doesn't check for validity, but we'll make it uppercase 
 	switch(strlen(token)) {
 		case 6:
 			for (int i = 0; i < 6; i++)
@@ -197,6 +201,8 @@ struct Reply process_command(const int sockfd, char* command)
     // "list" is a string that contains a list of chat rooms such 
     // as "r1,r2,r3,"
 	// ------------------------------------------------------------
+	
+	// Recv will automatically initialize these variables with the reply
 	struct Reply reply;
 	if(recv(sockfd, &reply, sizeof(reply), 0) <= 0) {
 		reply.status = FAILURE_UNKNOWN;
@@ -228,6 +234,8 @@ void process_chatmode(const char* host, const int port)
 	// At the same time, the client should wait for a message from
 	// the server.
 	// ------------------------------------------------------------
+	
+	// We'll use an fd_set to process either output or input when needed
 	fd_set room;
 	FD_ZERO(&room);
 	FD_SET(STDIN_FILENO, &room);
@@ -251,8 +259,9 @@ void process_chatmode(const char* host, const int port)
 	while (1) {
 		fd_set active_read_set = room;
 		fflush(stdout);
-    	select(chatroom_socket + 1, &active_read_set, NULL, NULL, NULL);
+		select(chatroom_socket + 1, &active_read_set, NULL, NULL, NULL);
     	
+    	// We got a message from the server
 		if (FD_ISSET(chatroom_socket, &active_read_set)) {
 			char incomingMessage[MAX_DATA];
 			if (recv(chatroom_socket, incomingMessage, MAX_DATA, 0) == 0) {
@@ -263,6 +272,7 @@ void process_chatmode(const char* host, const int port)
 			display_message(incomingMessage);
 		}
 	
+		// The user typed something and needs to be sent
 		if (FD_ISSET(STDIN_FILENO, &active_read_set)) {
 			char message[MAX_DATA];
 			get_message(message, MAX_DATA);
