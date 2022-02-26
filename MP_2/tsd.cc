@@ -322,9 +322,11 @@ class SNSServiceImpl final : public SNSService::Service {
     ifsUserTimeline.close();
     mLock.unlock();
 
-    while (!vSNSPosts.empty()) {
+    size_t counter = 0
+    while (!vSNSPosts.empty() && counter < 20) {
       stream->Write(*(vSNSPosts.end() - 1));
       vSNSPosts.pop_back();
+      counter++;
     }
 
     mStreamLock.lock();
