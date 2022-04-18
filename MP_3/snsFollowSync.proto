@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package snsFollowSync;
+
+import "google/protobuf/timestamp.proto";
+
+service SNSFollowSync {
+    rpc SyncUsers (User) returns (Reply) {}
+    rpc SyncFollow (Relat) returns (Reply) {}
+    rpc SyncTimeline (Post) returns (Reply) {}
+}
+
+message Relat {
+    int32 src_user_id = 1;
+    repeated int32 dest_user_id = 2;
+}
+
+message User {
+    repeated int32 src_user_id = 1;
+}
+
+message Post {
+    repeated int32 src_user_id = 1;
+    repeated string msg = 2;
+    repeated google.protobuf.Timestamp timestamp = 3;
+}
+
+message Reply {
+    string msg = 1;
+}
