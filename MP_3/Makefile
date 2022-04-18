@@ -24,7 +24,7 @@ tsc: sns.pb.o sns.grpc.pb.o snsCoordinator.pb.o snsCoordinator.grpc.pb.o tsc.o
 tsd: sns.pb.o sns.grpc.pb.o snsCoordinator.pb.o snsCoordinator.grpc.pb.o tsd.o 
 	$(CXX) $^ $(LDFLAGS) -g -o $@
 
-coordinator: snsCoordinator.pb.o snsCoordinator.grpc.pb.o coord.o
+coordinator: snsCoordinator.pb.o snsCoordinator.grpc.pb.o coordinator.o
 	$(CXX) $^ $(LDFLAGS) -g -o $@
 
 synchronizer: snsFollowSync.pb.o snsFollowSync.grpc.pb.o snsCoordinator.pb.o snsCoordinator.grpc.pb.o synchronizer.o
