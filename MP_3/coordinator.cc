@@ -32,6 +32,7 @@ using snsCoordinator::Coordinatee;
 using snsCoordinator::Request;
 using snsCoordinator::Reply;
 using snsCoordinator::Heartbeat;
+using snsCoordinator::ConnectionPoints;
 
 class SNSCoordinatorImpl final : public SNSCoordinator::Service {
 	Status Login(ServerContext* context, const Request* request, Reply* reply) override {
@@ -44,9 +45,15 @@ class SNSCoordinatorImpl final : public SNSCoordinator::Service {
 			} else {
 				reply->set_msg("localhost:" + vTableSlave[server_id].first);
 			}
-		} else {
-			int cluster_id = request->id();
-			reply->set_msg("localhost:" + vTableSlave[cluster_id].first);
+		} else if (request->coordinatee() == snsCoordinator::SERVER) {
+			if (request->server_type() == snsCoordinator::MASTER) {
+				int cluster_id = request->id();
+				reply->set_msg("localhost:" + vTableSlave[cluster_id].first);
+			} else if (request->server_type() == snsCoordinator::SYNC) {
+				int client_id = request->id();
+				int cluster_id = (client_id % 3) + 1;
+				reply->set_msg("localhost:" + vTableSync[cluster_id].first);
+			}
 		}
 		return Status::OK;
 	};
@@ -62,14 +69,17 @@ class SNSCoordinatorImpl final : public SNSCoordinator::Service {
 				case ServerType::MASTER:
 					std::cout << "Got master heartbeat from server ID " << hb.server_id() << "!" << std::endl;
 					vTableMaster[hb.server_id()] = std::pair<std::string, std::string>(hb.server_port(), "Active");
-					lastHb = hb;
 					break;
 				case ServerType::SLAVE:
 					std::cout << "Got slave heartbeat from server ID " << hb.server_id() << "!" << std::endl;
 					vTableSlave[hb.server_id()] = std::pair<std::string, std::string>(hb.server_port(), "Active");
-					lastHb = hb;
+					break;
+				case ServerType::SYNC:
+					std::cout << "Got synchronizer heartbeat from server ID " << hb.server_id() << "!" << std::endl;
+					vTableSync[hb.server_id()] = std::pair<std::string, std::string>(hb.server_port(), "Active");
 					break;
 			}
+			lastHb = hb;
 		}
 
 		if (lastHb.server_type() == ServerType::MASTER && got_first_beat) {
@@ -80,8 +90,19 @@ class SNSCoordinatorImpl final : public SNSCoordinator::Service {
 		return Status::OK;
 	}
 
+	Status ReturnFollowerSync(ServerContext* context, const Request* request, ConnectionPoints* connection_points) override {
+		for (auto syncer : vTableSync) {
+			if (syncer.first != request->id()) {
+				connection_points->add_cluster_ids(syncer.first);
+				connection_points->add_connection_points("localhost:" + syncer.second.first);
+			}
+		}
+		return Status::OK;
+	}
+
 	std::unordered_map<int, std::pair<std::string, std::string>> vTableMaster;
 	std::unordered_map<int, std::pair<std::string, std::string>> vTableSlave;
+	std::unordered_map<int, std::pair<std::string, std::string>> vTableSync;
 };
 
 

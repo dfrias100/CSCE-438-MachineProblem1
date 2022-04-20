@@ -483,6 +483,7 @@ void RunServer(std::string coordinator_ip, std::string coordinator_port,
     snsCoordinator::Reply rep;
 
     req.set_coordinatee(snsCoordinator::SERVER);
+    req.set_server_type(snsCoordinator::MASTER);
     req.set_id(server_id);
 
     Service.coordStub->Login(&grpcCoordContext, req, &rep);

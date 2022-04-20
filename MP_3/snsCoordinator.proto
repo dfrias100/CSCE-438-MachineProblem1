@@ -7,6 +7,7 @@ import "google/protobuf/timestamp.proto";
 service SNSCoordinator {
 	rpc Login (Request) returns (Reply) {}
 	rpc ServerCommunicate (stream Heartbeat) returns (stream Heartbeat) {}
+	rpc ReturnFollowerSync (Request) returns (ConnectionPoints) {}
 }
 
 enum ServerType {
@@ -20,6 +21,11 @@ enum ServerType {
 enum Coordinatee {
 	CLIENT = 0;
 	SERVER = 1;
+}
+
+message ConnectionPoints {
+	repeated int32 cluster_ids = 1;
+	repeated string connection_points = 2;
 }
 
 message Request {

@@ -13,5 +13,5 @@ sleep 5
 ./tsd -c localhost -d 9000 -p 6630 -i 3 -t master &
 
 ./synchronizer -c localhost -d 9000 -p 6710 -i 1 &
-./synchronizer -c localhost -d 9000 -p 6720 -i 1 &
-./synchronizer -c localhost -d 9000 -p 6730 -i 1 &
+./synchronizer -c localhost -d 9000 -p 6720 -i 2 &
+./synchronizer -c localhost -d 9000 -p 6730 -i 3 &
