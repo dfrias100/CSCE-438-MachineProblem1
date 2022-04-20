@@ -148,7 +148,8 @@ class SNSFollowSyncImpl final : public SNSFollowSync::Service {
                 if (users.src_user_id_size() > 0) {
                     for (auto follow_stub : followSyncStubs) {
                         grpc::ClientContext grpcFollowSyncContext;
-                        follow_stub.second->SyncUsers(&grpcFollowSyncContext, users, NULL);
+                        snsFollowSync::Reply reply;
+                        follow_stub.second->SyncUsers(&grpcFollowSyncContext, users, &reply);
                     }
                 }
             }
