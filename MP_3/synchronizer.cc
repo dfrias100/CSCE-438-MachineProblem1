@@ -93,13 +93,6 @@ class SNSFollowSyncImpl final : public SNSFollowSync::Service {
 
     std::mutex users_lock;
 
-    void PrintFileNames() {
-        for (auto f : cluster_file_names) {
-            std::cout << f.second.first << std::endl;
-            std::cout << f.second.second << std::endl;
-        }
-    }
-
     inline void AddClient(int id) {
         std::string file_suffix = std::to_string(server_id) + "_u" + std::to_string(id) + ".fg";
         cluster_file_names[id] = std::pair<std::string, std::string>(master_prefix + file_suffix, slave_prefix + file_suffix);          
@@ -132,7 +125,7 @@ class SNSFollowSyncImpl final : public SNSFollowSync::Service {
             std::cout << "Pinging users file on cluster " << server_id << std::endl;
             stat(users_file.c_str(), &sfile);
             current_file_size = sfile.st_size;
-            std::cout << (current_file_size > last_file_size) << std::endl;
+            
             if (current_file_size > last_file_size) {
                 std::cout << "Cluster " << server_id << " users file has changed." << std::endl;
                 users_lock.lock();
@@ -165,7 +158,6 @@ class SNSFollowSyncImpl final : public SNSFollowSync::Service {
                         snsFollowSync::Reply reply;
                         follow_stub.second->SyncUsers(&grpcFollowSyncContext, users, &reply);
                     }
-                    PrintFileNames();
                 }
             }
             
@@ -204,20 +196,19 @@ void RunServer(std::string coordinator_ip, std::string coordinator_port,
     }
   }
 
-  {
-    grpc::ClientContext grpcCoordContext;
-    snsCoordinator::Heartbeat hb;
-    hb.set_server_id(server_id);
-    hb.set_server_type(sv_type);
-    hb.set_server_port(port_no);
+  grpc::ClientContext grpcHeartbeatContext;
+  snsCoordinator::Heartbeat hb;
+  hb.set_server_id(server_id);
+  hb.set_server_type(sv_type);
+  hb.set_server_port(port_no);
 
-    time_t tsPostTime = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    auto gptPostTime = google::protobuf::util::TimeUtil::TimeTToTimestamp(tsPostTime);
-    hb.mutable_timestamp()->set_seconds(gptPostTime.seconds());
+  time_t tsPostTime = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+  auto gptPostTime = google::protobuf::util::TimeUtil::TimeTToTimestamp(tsPostTime);
+  hb.mutable_timestamp()->set_seconds(gptPostTime.seconds());
 
-    Service.cReaderWriter = Service.coordStub->ServerCommunicate(&grpcCoordContext);
-    Service.cReaderWriter->Write(hb);
-  }
+  Service.cReaderWriter = Service.coordStub->ServerCommunicate(&grpcHeartbeatContext);
+  Service.cReaderWriter->Write(hb);
+
 
   std::this_thread::sleep_for(std::chrono::seconds(5));
 
@@ -245,7 +236,6 @@ void RunServer(std::string coordinator_ip, std::string coordinator_port,
   std::thread tHeartbeatThread(&SNSFollowSyncImpl::SendHeartbeat, &Service);
   std::thread tCheckUsersThread(&SNSFollowSyncImpl::CheckUsers, &Service);
   server->Wait();
-  std::cout << "Here!" << std::endl;
 }
 
 int main(int argc, char** argv) {
