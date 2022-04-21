@@ -55,9 +55,21 @@ class SNSServiceImpl final : public SNSService::Service {
 
     mLock.lock();
     // Todo change this
-    for (size_t i = 0; i < vUsers.size(); i++) {
-      reply->add_all_users(vUsers[i]);
+    //for (size_t i = 0; i < vUsers.size(); i++) {
+    //  reply->add_all_users(vUsers[i]);
+    //}
+
+    std::ifstream ifsUsersListing;
+    ifsUsersListing.open(file_prefix + "users.ls");
+    std::string sUser;
+
+    std::vector<std::string> vUsersFromFile;
+
+    while(getline(ifsUsersListing, sUser) && ifsUsersListing.is_open()) {
+      vUsersFromFile.push_back(sUser);
     }
+
+    ifsUsersListing.close();
 
     std::ifstream ifsUserFollowers(file_prefix + username + ".fl");
     std::string sUserFollowers;
@@ -97,12 +109,14 @@ class SNSServiceImpl final : public SNSService::Service {
     std::ifstream ifsUserData(file_prefix + username + ".fg");
     std::ofstream ofsUserData;
 
+    // TODO: Change this
     if (std::find(vUsers.begin(), vUsers.end(), request->arguments(0)) == vUsers.end()) {
       ifsUserData.close();
       mLock.unlock();
       return Status(grpc::StatusCode::NOT_FOUND, "");
     }
 
+    /* TODO: Change this to use fg file
     std::fstream fsTargetUserData(file_prefix + request->arguments(0) + ".fl", std::ios::out | std::ios::app);
 
     std::string sUserFollowers;
@@ -125,113 +139,20 @@ class SNSServiceImpl final : public SNSService::Service {
       mLock.unlock();
       return Status(grpc::StatusCode::ALREADY_EXISTS, "");
     }
+    */
 
     ofsUserData.open(file_prefix + username + ".fg");
-    sUserFollowers.append(request->arguments(0) + " ");
+    // sUserFollowers.append(request->arguments(0) + " ");
 
-    fsTargetUserData << username << " ";
-    ofsUserData << sUserFollowers << std::endl;
+    // fsTargetUserData << username << " ";
+    // ofsUserData << sUserFollowers << std::endl;
 
     ofsUserData.close();
-    fsTargetUserData.close();
+    //fsTargetUserData.close();
 
     mLock.unlock();
 
     return Status::OK; 
-  }
-
-  Status UnFollow(ServerContext* context, const Request* request, Reply* reply) override {
-    // ------------------------------------------------------------
-    // In this function, you are to write code that handles 
-    // request from a user to unfollow one of his/her existing
-    // followers
-    // ------------------------------------------------------------
-    std::string username = request->username();
-
-    mLock.lock();
-
-    std::ifstream ifsUserData(username + ".fg");
-    std::ofstream ofsUserData;
-
-    if (username == request->arguments(0) || std::find(vUsers.begin(), vUsers.end(), request->arguments(0)) == vUsers.end()) {
-      ifsUserData.close();
-      mLock.unlock();
-      return Status(grpc::StatusCode::NOT_FOUND, "");
-    }
-
-    // ------------------------------------------------ //
-
-    std::string sUserFollowers;
-    std::string sUserFollower;
-    std::vector<std::string> vUserFollowers;
-
-    if (!std::getline(ifsUserData, sUserFollowers)) {
-      sUserFollowers = "";
-    }
-
-    ifsUserData.close();
-
-    std::stringstream ssFollowerParser(sUserFollowers);
-
-    while (ssFollowerParser >> sUserFollower) {
-      vUserFollowers.push_back(sUserFollower);
-    }
-
-    if (std::find(vUserFollowers.begin(), vUserFollowers.end(), request->arguments(0)) == vUserFollowers.end()) {
-      mLock.unlock();
-      return Status(grpc::StatusCode::NOT_FOUND, "");
-    }
-
-    // --------------------------------------------------- //
-
-    std::ifstream ifsTargetUserData(request->arguments(0) + ".fl");
-    std::ofstream ofsTargetUserData;
-
-    std::string sTargetUserFollowers;
-    std::string sTargetUserFollower;
-    std::vector<std::string> vTargetUserFollowers;
-
-    if (!std::getline(ifsTargetUserData, sTargetUserFollowers)) {
-      sTargetUserFollowers = "";
-    }
-
-    ifsTargetUserData.close();
-
-    ssFollowerParser = std::stringstream(sTargetUserFollowers);
-
-    while (ssFollowerParser >> sTargetUserFollower) {
-      vTargetUserFollowers.push_back(sTargetUserFollower);
-    }
-
-    std::vector<std::string>::iterator spTargetUserEntry = std::find(vTargetUserFollowers.begin(), vTargetUserFollowers.end(), username);
-    vTargetUserFollowers.erase(spTargetUserEntry);
-
-    // ------------------------------------------- //
-
-    std::vector<std::string>::iterator spUserFollowingEntry = std::find(vUserFollowers.begin(), vUserFollowers.end(), request->arguments(0));
-    vUserFollowers.erase(spUserFollowingEntry);
-
-    ofsUserData.open(username + ".fg");
-    ofsTargetUserData.open(request->arguments(0) + ".fl");
-
-    sUserFollowers = "";
-    for (size_t i = 0; i < vUserFollowers.size(); i++) {
-      sUserFollowers += vUserFollowers[i] + " ";
-    }
-    ofsUserData << sUserFollowers;
-
-    sTargetUserFollowers = "";
-    for (size_t i = 0; i < vTargetUserFollowers.size(); i++) {
-      sTargetUserFollowers += vTargetUserFollowers[i] + " ";
-    }
-    ofsTargetUserData << sTargetUserFollowers;
-
-    ofsUserData.close();
-    ofsTargetUserData.close();
-
-    mLock.unlock();
-
-    return Status::OK;
   }
   
   Status Login(ServerContext* context, const Request* request, Reply* reply) override {
@@ -451,6 +372,7 @@ void RunServer(std::string coordinator_ip, std::string coordinator_port,
     Service.file_prefix = "slave" + std::to_string(server_id) + "_";
   }
 
+  /*
   std::ifstream ifsUsersListing;
   ifsUsersListing.open(Service.file_prefix + "users.ls");
   std::string sUser;
@@ -460,6 +382,7 @@ void RunServer(std::string coordinator_ip, std::string coordinator_port,
   }
 
   ifsUsersListing.close();
+  */
 
   Service.coordChannel = grpc::CreateChannel(coordinator_ip + ":" + coordinator_port, grpc::InsecureChannelCredentials());
   Service.coordStub = snsCoordinator::SNSCoordinator::NewStub(Service.coordChannel);

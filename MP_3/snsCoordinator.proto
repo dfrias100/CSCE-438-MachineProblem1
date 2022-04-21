@@ -8,6 +8,7 @@ service SNSCoordinator {
 	rpc Login (Request) returns (Reply) {}
 	rpc ServerCommunicate (stream Heartbeat) returns (stream Heartbeat) {}
 	rpc ReturnFollowerSync (Request) returns (ConnectionPoints) {}
+	rpc WhoseClient (Search) returns (Result) {}
 }
 
 enum ServerType {
@@ -28,11 +29,19 @@ message ConnectionPoints {
 	repeated string connection_points = 2;
 }
 
+message Search {
+	int32 user_id = 1;
+}
+
 message Request {
 	Coordinatee coordinatee = 1;
 	string port_num = 2;
 	int32 ID = 3;
 	ServerType server_type = 4;
+}
+
+message Result {
+	int32 cluster_id = 1;
 }
 
 message Reply {

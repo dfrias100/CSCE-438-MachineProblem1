@@ -33,6 +33,8 @@ using snsCoordinator::Request;
 using snsCoordinator::Reply;
 using snsCoordinator::Heartbeat;
 using snsCoordinator::ConnectionPoints;
+using snsCoordinator::Search;
+using snsCoordinator::Result;
 
 class SNSCoordinatorImpl final : public SNSCoordinator::Service {
 	Status Login(ServerContext* context, const Request* request, Reply* reply) override {
@@ -100,6 +102,14 @@ class SNSCoordinatorImpl final : public SNSCoordinator::Service {
 		return Status::OK;
 	}
 
+	Status WhoseClient(ServerContext* context, const Search* request, Result* reply) override {
+		int cluster_id = (request->user_id() % 3) + 1;
+
+		reply->set_cluster_id(cluster_id);
+
+		return Status::OK;
+	}
+
 	std::unordered_map<int, std::pair<std::string, std::string>> vTableMaster;
 	std::unordered_map<int, std::pair<std::string, std::string>> vTableSlave;
 	std::unordered_map<int, std::pair<std::string, std::string>> vTableSync;
@@ -120,7 +130,6 @@ void RunCoordinator(std::string port_no) {
 }
 
 int main(int argc, char** argv) {
-  
   std::string port = "9090";
   int opt = 0;
   while ((opt = getopt(argc, argv, "p:")) != -1){

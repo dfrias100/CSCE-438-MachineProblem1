@@ -89,8 +89,21 @@ class SNSFollowSyncImpl final : public SNSFollowSync::Service {
     std::string port_no;
 
     std::unordered_map<int, int> user_ids;
+    std::unordered_map<int, std::pair<std::string, std::string>> cluster_file_names;
 
     std::mutex users_lock;
+
+    void PrintFileNames() {
+        for (auto f : cluster_file_names) {
+            std::cout << f.second.first << std::endl;
+            std::cout << f.second.second << std::endl;
+        }
+    }
+
+    inline void AddClient(int id) {
+        std::string file_suffix = std::to_string(server_id) + "_u" + std::to_string(id) + ".fg";
+        cluster_file_names[id] = std::pair<std::string, std::string>(master_prefix + file_suffix, slave_prefix + file_suffix);          
+    }
 
     void SendHeartbeat() {
         while(true) {
@@ -119,7 +132,7 @@ class SNSFollowSyncImpl final : public SNSFollowSync::Service {
             std::cout << "Pinging users file on cluster " << server_id << std::endl;
             stat(users_file.c_str(), &sfile);
             current_file_size = sfile.st_size;
-            
+            std::cout << (current_file_size > last_file_size) << std::endl;
             if (current_file_size > last_file_size) {
                 std::cout << "Cluster " << server_id << " users file has changed." << std::endl;
                 users_lock.lock();
@@ -141,6 +154,7 @@ class SNSFollowSyncImpl final : public SNSFollowSync::Service {
                     if (auto u = user_ids.find(i); u == user_ids.end()) {
                         users.add_src_user_id(i);
                         user_ids[i] = i;
+                        AddClient(i);
                     }
                 }
                 users_lock.unlock();
@@ -151,6 +165,7 @@ class SNSFollowSyncImpl final : public SNSFollowSync::Service {
                         snsFollowSync::Reply reply;
                         follow_stub.second->SyncUsers(&grpcFollowSyncContext, users, &reply);
                     }
+                    PrintFileNames();
                 }
             }
             
@@ -170,26 +185,39 @@ void RunServer(std::string coordinator_ip, std::string coordinator_port,
   std::ifstream user_listing;
   user_listing.open("slave" + std::to_string(server_id) + "_users.ls");
   std::string user;
-  
-  while (user_listing >> user) {
-      Service.user_ids[std::stoi(user.substr(1, user.size() - 1))] = std::stoi(user.substr(1, user.size() - 1));
-  }
 
   Service.coordChannel = grpc::CreateChannel(coordinator_ip + ":" + coordinator_port, grpc::InsecureChannelCredentials());
   Service.coordStub = snsCoordinator::SNSCoordinator::NewStub(Service.coordChannel);
 
-  grpc::ClientContext grpcCoordContext;
-  snsCoordinator::Heartbeat hb;
-  hb.set_server_id(server_id);
-  hb.set_server_type(sv_type);
-  hb.set_server_port(port_no);
+  while (user_listing >> user) {
+    int user_id = std::stoi(user.substr(1, user.size() - 1));
+    Service.user_ids[user_id] = user_id;
 
-  time_t tsPostTime = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-  auto gptPostTime = google::protobuf::util::TimeUtil::TimeTToTimestamp(tsPostTime);
-  hb.mutable_timestamp()->set_seconds(gptPostTime.seconds());
+    grpc::ClientContext grpcCoordContext;
+    snsCoordinator::Search query;
+    snsCoordinator::Result result;
+    query.set_user_id(user_id);
+    Service.coordStub->WhoseClient(&grpcCoordContext, query, &result);
+    
+    if (result.cluster_id() == server_id) {
+        Service.AddClient(user_id);
+    }
+  }
 
-  Service.cReaderWriter = Service.coordStub->ServerCommunicate(&grpcCoordContext);
-  Service.cReaderWriter->Write(hb);
+  {
+    grpc::ClientContext grpcCoordContext;
+    snsCoordinator::Heartbeat hb;
+    hb.set_server_id(server_id);
+    hb.set_server_type(sv_type);
+    hb.set_server_port(port_no);
+
+    time_t tsPostTime = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    auto gptPostTime = google::protobuf::util::TimeUtil::TimeTToTimestamp(tsPostTime);
+    hb.mutable_timestamp()->set_seconds(gptPostTime.seconds());
+
+    Service.cReaderWriter = Service.coordStub->ServerCommunicate(&grpcCoordContext);
+    Service.cReaderWriter->Write(hb);
+  }
 
   std::this_thread::sleep_for(std::chrono::seconds(5));
 
@@ -217,6 +245,7 @@ void RunServer(std::string coordinator_ip, std::string coordinator_port,
   std::thread tHeartbeatThread(&SNSFollowSyncImpl::SendHeartbeat, &Service);
   std::thread tCheckUsersThread(&SNSFollowSyncImpl::CheckUsers, &Service);
   server->Wait();
+  std::cout << "Here!" << std::endl;
 }
 
 int main(int argc, char** argv) {
