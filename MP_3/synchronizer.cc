@@ -8,6 +8,7 @@
 #include <thread>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <memory>
 #include <string>
 #include <stdlib.h>
@@ -16,6 +17,7 @@
 #include <grpc++/grpc++.h>
 #include <sys/stat.h>
 
+#include "sns.grpc.pb.h"
 #include "snsCoordinator.grpc.pb.h"
 #include "snsFollowSync.grpc.pb.h"
 
@@ -36,10 +38,28 @@ using snsFollowSync::User;
 using snsFollowSync::Post;
 using snsFollowSync::Reply;
 
+const std::string master_prefix = "master";
+const std::string slave_prefix = "slave";
+
+struct StatMap {
+    std::unordered_map<int, std::pair<std::string, std::string>> cluster_file_names;
+    std::map<int, struct stat> stat_map;
+    std::map<int, std::pair<off_t, off_t>> current_last_map;
+    int server_id; 
+    std::string file_extension;
+
+    inline void AddClient(int id) {
+        std::string file_suffix = std::to_string(server_id) + "_u" + std::to_string(id) + file_extension;
+        cluster_file_names[id] = std::pair<std::string, std::string>(master_prefix + file_suffix, slave_prefix + file_suffix);          
+    }
+
+    inline void StatFile(int id) {
+        stat(cluster_file_names[id].second.c_str(), &stat_map[id]);
+        current_last_map[id].first = stat_map[id].st_size;
+    }
+};
+
 class SNSFollowSyncImpl final : public SNSFollowSync::Service {
-    const std::string master_prefix = "master";
-    const std::string slave_prefix = "slave";
-    int cluster_id;
     Status SyncUsers(ServerContext* context, const User* user, Reply* reply) override {
         std::cout << "Sync users called!" << std::endl;
         std::string master_users_filename = master_prefix + std::to_string(server_id) + "_users.ls";
@@ -68,10 +88,28 @@ class SNSFollowSyncImpl final : public SNSFollowSync::Service {
     }
 
     Status SyncFollow(ServerContext* context, const Relat* relat, Reply* reply) override {
+        std::cout << "CLUSTER " << server_id << ": Received follow request to " << relat->dest_user_id() << " from " << relat->src_user_id() << std::endl;
+        
+        std::string master_follower_file_name = master_prefix + std::to_string(server_id) + "_u" + std::to_string(relat->dest_user_id()) + ".fl";
+        std::string slave_follower_file_name = slave_prefix + std::to_string(server_id) + "_u" + std::to_string(relat->dest_user_id()) + ".fl";
+
+        user_follower_context_lock.lock();
+        std::ofstream master_follower_file_stream;
+        master_follower_file_stream.open(master_follower_file_name, std::ios::app);
+        master_follower_file_stream << std::string("u" + std::to_string(relat->src_user_id())) << std::endl;
+        master_follower_file_stream.close();
+
+        std::ofstream slave_follower_file_stream;
+        slave_follower_file_stream.open(slave_follower_file_name, std::ios::app);
+        slave_follower_file_stream << std::string("u" + std::to_string(relat->src_user_id())) << std::endl;
+        slave_follower_file_stream.close();
+        user_follower_context_lock.unlock();
+        
         return Status::OK;
     }
 
-    Status SyncTimeline(ServerContext* context, const Post* user, Reply* reply) override {
+    Status SyncTimeline(ServerContext* context, const Post* post, Reply* reply) override {
+        std::cout << "Got post!" << std::endl;
         return Status::OK;
     }
 
@@ -89,14 +127,13 @@ class SNSFollowSyncImpl final : public SNSFollowSync::Service {
     std::string port_no;
 
     std::unordered_map<int, int> user_ids;
-    std::unordered_map<int, std::pair<std::string, std::string>> cluster_file_names;
+
+    struct StatMap following_stat_map;
+    struct StatMap timeline_stat_map;
 
     std::mutex users_lock;
+    std::mutex user_follower_context_lock;
 
-    inline void AddClient(int id) {
-        std::string file_suffix = std::to_string(server_id) + "_u" + std::to_string(id) + ".fg";
-        cluster_file_names[id] = std::pair<std::string, std::string>(master_prefix + file_suffix, slave_prefix + file_suffix);          
-    }
 
     void SendHeartbeat() {
         while(true) {
@@ -143,11 +180,14 @@ class SNSFollowSyncImpl final : public SNSFollowSync::Service {
                     iUsers.push_back(std::stoi(sUser.substr(1, sUser.size() - 1)));
                 }
 
+                users_file_stream.close();
+
                 for (int i : iUsers) {
                     if (auto u = user_ids.find(i); u == user_ids.end()) {
                         users.add_src_user_id(i);
                         user_ids[i] = i;
-                        AddClient(i);
+                        following_stat_map.AddClient(i);
+                        timeline_stat_map.AddClient(i);
                     }
                 }
                 users_lock.unlock();
@@ -162,6 +202,134 @@ class SNSFollowSyncImpl final : public SNSFollowSync::Service {
             }
             
             last_file_size = current_file_size;
+        }
+    }
+
+    void CheckFollowing() {
+        while (true) {
+            std::this_thread::sleep_for(std::chrono::seconds(10));
+            for (auto file_pair : following_stat_map.cluster_file_names) {
+                int user_id = file_pair.first;
+                following_stat_map.StatFile(user_id);
+                if (following_stat_map.current_last_map[user_id].first > following_stat_map.current_last_map[user_id].second) {
+                    std::cout << "here" << std::endl;
+                    std::ifstream user_following_stream;
+                    user_following_stream.open(file_pair.second.second);
+
+                    std::vector<Relat> relationships;
+                    std::vector<int> vUserFollowings;
+                    std::string sUser;
+
+                    user_following_stream.seekg(following_stat_map.current_last_map[user_id].second);
+
+                    while(getline(user_following_stream, sUser) && user_following_stream.is_open()) {
+                        vUserFollowings.push_back(std::stoi(sUser.substr(1, sUser.size() - 1)));
+                    }
+
+                    user_following_stream.close();
+
+                    for (int i : vUserFollowings) {
+                        Relat relat;
+                        relat.set_src_user_id(user_id);
+                        relat.set_dest_user_id(i);
+                        relationships.push_back(relat);
+                    }
+
+                    for (Relat r : relationships) {
+                        grpc::ClientContext coordContext;
+                        snsCoordinator::Search query;
+                        snsCoordinator::Result result;
+
+                        query.set_user_id(r.dest_user_id());
+
+                        coordStub->WhoseClient(&coordContext, query, &result);
+
+                        int stub_id = result.cluster_id();
+
+                        grpc::ClientContext grpcFollowSyncContext;
+                        snsFollowSync::Reply reply;
+                        followSyncStubs[stub_id]->SyncFollow(&grpcFollowSyncContext, r, &reply);
+                    }
+                }
+
+                following_stat_map.current_last_map[user_id].second = following_stat_map.current_last_map[user_id].first;
+            }
+        }
+    }
+
+    void CheckTimeline() {
+        while (true) {
+            std::this_thread::sleep_for(std::chrono::seconds(10));
+            for (auto file_pair : timeline_stat_map.cluster_file_names) {
+                std::cout << "Checking timeline contexts." << std::endl;
+                int user_id = file_pair.first;
+                timeline_stat_map.StatFile(user_id);
+                if (timeline_stat_map.current_last_map[user_id].first > timeline_stat_map.current_last_map[user_id].second) {
+                    std::cout << "New post found from user " << user_id << std::endl;
+                    std::ifstream user_timeline_stream;
+                    user_timeline_stream.open(file_pair.second.second);
+
+                    std::vector<Post> posts;
+                    std::string sPost;
+                    Post msg;
+
+                    user_timeline_stream.seekg(timeline_stat_map.current_last_map[user_id].second);
+
+                    while (getline(user_timeline_stream, sPost)) {
+                        std::string sPostUsername;
+                        std::string sPostMessage;
+                        std::string sPostTimestamp;
+                        google::protobuf::int64 tsPostTime;
+
+                        std::stringstream ssUserPostParser(sPost);
+                        getline(ssUserPostParser, sPostUsername, '%');
+                        getline(ssUserPostParser, sPostMessage, '%');
+                        getline(ssUserPostParser, sPostTimestamp, '%');
+                        sPostMessage.append("\n");
+
+                        tsPostTime = strtoll(sPostTimestamp.data(), NULL, 10);   
+
+                        msg.set_src_user_id(std::stoi(sPostUsername.substr(1, sPostUsername.size() - 1)));
+                        msg.set_msg(sPostMessage);
+                        msg.mutable_timestamp()->set_seconds(google::protobuf::util::TimeUtil::TimeTToTimestamp(tsPostTime).seconds());
+
+                        posts.push_back(msg);
+                    }
+
+                    user_timeline_stream.close();
+
+                    std::ifstream user_followers_stream;
+                    std::vector<int> user_follower_ids;
+                    std::string sUser;
+                    user_followers_stream.open(slave_prefix + std::to_string(server_id) + "_u" + std::to_string(user_id) + ".fl");
+                    while (user_followers_stream >> sUser) {
+                        user_follower_ids.push_back(std::stoi(sUser.substr(1, sUser.size() - 1)));
+                    }
+                    user_followers_stream.close();
+
+                    for (int i : user_follower_ids) {
+                        for (Post p : posts) {
+                            grpc::ClientContext coordContext;
+                            snsCoordinator::Search query;
+                            snsCoordinator::Result result;
+
+                            query.set_user_id(i);
+
+                            coordStub->WhoseClient(&coordContext, query, &result);
+
+                            int stub_id = result.cluster_id();
+
+                            p.set_dest_user_id(i);
+
+                            grpc::ClientContext grpcFollowSyncContext;
+                            snsFollowSync::Reply reply;
+                            followSyncStubs[stub_id]->SyncTimeline(&grpcFollowSyncContext, p, &reply);
+                        }
+                    }
+                }
+
+                timeline_stat_map.current_last_map[user_id].second = timeline_stat_map.current_last_map[user_id].first;
+            }
         }
     }
 };
@@ -181,6 +349,12 @@ void RunServer(std::string coordinator_ip, std::string coordinator_port,
   Service.coordChannel = grpc::CreateChannel(coordinator_ip + ":" + coordinator_port, grpc::InsecureChannelCredentials());
   Service.coordStub = snsCoordinator::SNSCoordinator::NewStub(Service.coordChannel);
 
+  Service.following_stat_map.file_extension = ".fg";
+  Service.following_stat_map.server_id = server_id;
+
+  Service.timeline_stat_map.file_extension = ".tl";
+  Service.timeline_stat_map.server_id = server_id;
+
   while (user_listing >> user) {
     int user_id = std::stoi(user.substr(1, user.size() - 1));
     Service.user_ids[user_id] = user_id;
@@ -192,7 +366,23 @@ void RunServer(std::string coordinator_ip, std::string coordinator_port,
     Service.coordStub->WhoseClient(&grpcCoordContext, query, &result);
     
     if (result.cluster_id() == server_id) {
-        Service.AddClient(user_id);
+        struct stat st1;
+        struct stat st2;
+
+        Service.following_stat_map.stat_map[user_id] = st1;
+        Service.timeline_stat_map.stat_map[user_id] = st2;
+
+        Service.following_stat_map.AddClient(user_id);
+        Service.timeline_stat_map.AddClient(user_id);
+
+        stat(Service.following_stat_map.cluster_file_names[user_id].second.c_str(), &Service.following_stat_map.stat_map[user_id]);
+        stat(Service.timeline_stat_map.cluster_file_names[user_id].second.c_str(), &Service.timeline_stat_map.stat_map[user_id]);
+
+
+        Service.following_stat_map.current_last_map[user_id] = std::pair<off_t, off_t>(Service.following_stat_map.stat_map[user_id].st_size, 
+                                                                      Service.following_stat_map.stat_map[user_id].st_size);
+        Service.timeline_stat_map.current_last_map[user_id] = std::pair<off_t, off_t>(Service.timeline_stat_map.stat_map[user_id].st_size, 
+                                                                      Service.timeline_stat_map.stat_map[user_id].st_size);
     }
   }
 
@@ -208,7 +398,6 @@ void RunServer(std::string coordinator_ip, std::string coordinator_port,
 
   Service.cReaderWriter = Service.coordStub->ServerCommunicate(&grpcHeartbeatContext);
   Service.cReaderWriter->Write(hb);
-
 
   std::this_thread::sleep_for(std::chrono::seconds(5));
 
@@ -235,6 +424,8 @@ void RunServer(std::string coordinator_ip, std::string coordinator_port,
 
   std::thread tHeartbeatThread(&SNSFollowSyncImpl::SendHeartbeat, &Service);
   std::thread tCheckUsersThread(&SNSFollowSyncImpl::CheckUsers, &Service);
+  std::thread tCheckFollowThread(&SNSFollowSyncImpl::CheckFollowing, &Service);
+  std::thread tCheckTimelineThread(&SNSFollowSyncImpl::CheckTimeline, &Service);
   server->Wait();
 }
 

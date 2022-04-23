@@ -94,7 +94,6 @@ void IClient::displayTitle() const
     std::cout << "\n========= TINY SNS CLIENT =========\n";
     std::cout << " Command Lists and Format:\n";
     std::cout << " FOLLOW <username>\n";
-    std::cout << " UNFOLLOW <username>\n";
     std::cout << " LIST\n";
     std::cout << " TIMELINE\n";
     std::cout << "=====================================\n";

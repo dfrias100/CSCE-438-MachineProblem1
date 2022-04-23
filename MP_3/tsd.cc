@@ -54,34 +54,20 @@ class SNSServiceImpl final : public SNSService::Service {
     std::string username = request->username();
 
     mLock.lock();
-    // Todo change this
-    //for (size_t i = 0; i < vUsers.size(); i++) {
-    //  reply->add_all_users(vUsers[i]);
-    //}
-
     std::ifstream ifsUsersListing;
     ifsUsersListing.open(file_prefix + "users.ls");
     std::string sUser;
 
-    std::vector<std::string> vUsersFromFile;
-
     while(getline(ifsUsersListing, sUser) && ifsUsersListing.is_open()) {
-      vUsersFromFile.push_back(sUser);
+      reply->add_all_users(sUser);
     }
 
     ifsUsersListing.close();
 
     std::ifstream ifsUserFollowers(file_prefix + username + ".fl");
-    std::string sUserFollowers;
-
-    if (!std::getline(ifsUserFollowers, sUserFollowers)) {
-      sUserFollowers = "";
-    }
-
-    std::stringstream ss(sUserFollowers);
     std::string sUserFollower;
 
-    while (ss >> sUserFollower) {
+    while(std::getline(ifsUserFollowers, sUserFollower) && ifsUserFollowers.is_open()) {
       reply->add_following_users(sUserFollower);
     }
     mLock.unlock();
@@ -109,47 +95,42 @@ class SNSServiceImpl final : public SNSService::Service {
     std::ifstream ifsUserData(file_prefix + username + ".fg");
     std::ofstream ofsUserData;
 
-    // TODO: Change this
-    if (std::find(vUsers.begin(), vUsers.end(), request->arguments(0)) == vUsers.end()) {
+    std::ifstream ifsUsersListing;
+    ifsUsersListing.open(file_prefix + "users.ls");
+    std::string sUser;
+    std::vector<std::string> vUserListing;
+
+    while(getline(ifsUsersListing, sUser) && ifsUsersListing.is_open()) {
+      vUserListing.push_back(sUser);
+    }
+
+    ifsUsersListing.close();
+
+    if (std::find(vUserListing.begin(), vUserListing.end(), request->arguments(0)) == vUserListing.end()) {
       ifsUserData.close();
       mLock.unlock();
       return Status(grpc::StatusCode::NOT_FOUND, "");
     }
 
-    /* TODO: Change this to use fg file
-    std::fstream fsTargetUserData(file_prefix + request->arguments(0) + ".fl", std::ios::out | std::ios::app);
+    std::vector<std::string> vUserFollowing;
+    std::string sUserFollowing;
 
-    std::string sUserFollowers;
-    std::string sUserFollower;
-    std::vector<std::string> vUserFollowers;
-
-    if (!std::getline(ifsUserData, sUserFollowers)) {
-      sUserFollowers = "";
+    while (std::getline(ifsUserData, sUserFollowing) && ifsUserData.is_open()) {
+      vUserFollowing.push_back(sUserFollowing);
     }
 
     ifsUserData.close();
 
-    std::stringstream ssFollowerParser(sUserFollowers);
-
-    while (ssFollowerParser >> sUserFollower) {
-      vUserFollowers.push_back(sUserFollower);
-    }
-
-    if (std::find(vUserFollowers.begin(), vUserFollowers.end(), request->arguments(0)) != vUserFollowers.end()) {
+    if (std::find(vUserFollowing.begin(), vUserFollowing.end(), request->arguments(0)) != vUserFollowing.end() || request->arguments(0) == username) {
       mLock.unlock();
       return Status(grpc::StatusCode::ALREADY_EXISTS, "");
     }
-    */
+    
 
-    ofsUserData.open(file_prefix + username + ".fg");
-    // sUserFollowers.append(request->arguments(0) + " ");
-
-    // fsTargetUserData << username << " ";
-    // ofsUserData << sUserFollowers << std::endl;
+    ofsUserData.open(file_prefix + username + ".fg", std::ios::app);
+    ofsUserData << request->arguments(0) << std::endl;
 
     ofsUserData.close();
-    //fsTargetUserData.close();
-
     mLock.unlock();
 
     return Status::OK; 
@@ -187,22 +168,18 @@ class SNSServiceImpl final : public SNSService::Service {
     
     if (!ifsUserTimeline.is_open()) {
       ofsUserTimeline.open(file_prefix + username + ".tl");
+      ofsUserListing << username << std::endl;
     }   
 
     if (!ifsUserFollowers.is_open()) {
       ofsUserFollowers.open(file_prefix + username + ".fl");
-      ofsUserFollowers << username << " ";
+      //ofsUserFollowers << username << std::endl;
     }   
 
     if (!ifsUserFollowing.is_open()) {
       ofsUserFollowing.open(file_prefix + username + ".fg");
-      ofsUserFollowing << username << " ";
+      //ofsUserFollowing << username << std::endl;
     }   
-
-    if (std::find(vUsers.begin(), vUsers.end(), username) == vUsers.end()) {
-      vUsers.push_back(username);
-      ofsUserListing << username << std::endl;
-    }
 
     ofsUserTimeline.close();
     ofsUserFollowers.close();

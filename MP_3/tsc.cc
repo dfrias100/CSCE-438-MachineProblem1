@@ -219,34 +219,6 @@ IReply Client::processCommand(std::string &input)
                 }
             }
         }
-        else if (vCommandTokens[0] == "UNFOLLOW")
-        {
-            if (vCommandTokens.size() < 2)
-            {
-                ire.comm_status = FAILURE_INVALID;
-                return ire;
-            }
-            cRequest.set_username(username);
-            cRequest.add_arguments(vCommandTokens[1]);
-            status = stub_->UnFollow(&grpcCContext, cRequest, &sReply);
-            ire.grpc_status = status;
-            if (status.ok())
-            {
-                ire.comm_status = SUCCESS;
-            }
-            else
-            {
-                switch (status.error_code())
-                {
-                case grpc::StatusCode::NOT_FOUND:
-                    ire.grpc_status = grpc::Status::OK;
-                    ire.comm_status = FAILURE_INVALID_USERNAME;
-                    break;
-                default:
-                    ire.comm_status = FAILURE_UNKNOWN;
-                }
-            }
-        }
         else if (vCommandTokens[0] == "LIST")
         {
             cRequest.set_username(username);

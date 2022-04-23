@@ -39,8 +39,10 @@ synchronizer: snsFollowSync.pb.o snsFollowSync.grpc.pb.o snsCoordinator.pb.o sns
 	$(PROTOC) --cpp_out=. $<
 
 clean:
-	rm -f *.txt *.o *.pb.cc *.pb.h tsc tsd coordinator synchronizer
+	rm -f *.fg *.fl *.ls *.tl *.o *.pb.cc *.pb.h tsc tsd coordinator synchronizer
 
+context-clean:
+	rm -f *.fg *.fl *.ls *.tl
 
 # The following is to test your system and ensure a smoother experience.
 # They are by no means necessary to actually compile a grpc-enabled software.
