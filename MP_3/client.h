@@ -193,7 +193,5 @@ std::string getPostMessage()
 
 void displayPostMessage(const std::string& sender, const std::string& message, std::time_t& time)
 {
-    std::string t_str(std::ctime(&time));
-    t_str[t_str.size()-1] = '\0';
-    std::cout << sender << "(" << t_str << ") >> " << message << std::endl;
+    std::cout << sender << " >> " << message << std::endl;
 }

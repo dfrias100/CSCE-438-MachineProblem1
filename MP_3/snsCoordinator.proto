@@ -46,6 +46,7 @@ message Result {
 
 message Reply {
 	string msg = 1;
+	ServerType server_type = 2;
 }
 
 message Heartbeat {

@@ -10,7 +10,8 @@ service SNSService{
   rpc Login (Request) returns (Reply) {}
   rpc List (Request) returns (Reply) {}
   rpc Follow (Request) returns (Reply) {}
-  rpc Timeline (stream Message) returns (stream Message) {} 
+  rpc Timeline (stream Message) returns (stream Message) {}
+  rpc ReplicaWriteTimeline (Message) returns (Reply) {} 
 }
 
 // The request definition

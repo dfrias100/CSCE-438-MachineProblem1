@@ -55,7 +55,12 @@ int main(int argc, char **argv)
             port = optarg;
             break;
         case 'i':
-            username = "u" + std::to_string(std::stoi(optarg));
+            try {
+                username = "u" + std::to_string(std::stoi(optarg));
+            } catch(std::exception& e) {
+                std::cerr << "Invalid username id" << std::endl;
+                return 1;
+            }
             break;
         default:
             std::cerr << "Invalid Command Line Argument\n";
@@ -114,6 +119,8 @@ int Client::connectTo()
     {
         return -1;
     }
+
+    std::cout << "Connected to " << (coordReply.server_type() == snsCoordinator::MASTER ? "MASTER" : "SLAVE") << " server at " << coordReply.msg() << std::endl;
 
     return 1; // return 1 if success, otherwise return -1
 }
@@ -194,6 +201,24 @@ IReply Client::processCommand(std::string &input)
                 ire.comm_status = FAILURE_INVALID;
                 return ire;
             }
+
+            if (vCommandTokens[1].at(0) == 'u') {
+                try {
+                    std::stoi(vCommandTokens[1].substr(1, vCommandTokens[1].size() - 1));
+                } catch (std::exception& e) {
+                    ire.comm_status = FAILURE_INVALID_USERNAME;
+                    return ire;
+                }
+            } else {
+                try {
+                    std::stoi(vCommandTokens[1]);
+                    vCommandTokens[1] = "u" + vCommandTokens[1];
+                } catch (std::exception& e) {
+                    ire.comm_status = FAILURE_INVALID_USERNAME;
+                    return ire;
+                }
+            } 
+
             cRequest.set_username(username);
             cRequest.add_arguments(vCommandTokens[1]);
             status = stub_->Follow(&grpcCContext, cRequest, &sReply);
