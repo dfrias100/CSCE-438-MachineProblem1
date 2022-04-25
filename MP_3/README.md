@@ -15,7 +15,7 @@ You may also run `make clean-no-remove-binary` to remove the context files along
 For your clients, please use port `9000` (the clients automatically default to this port). And the coordinator assumes the servers run on `localhost`. 
 
 Binary list:
-Coordinator - `coordinator`
-Follower synchronizer - `synchronizer`
-Server - `tsd`
-Client - `tsc`
+- Coordinator - `coordinator`
+- Follower synchronizer - `synchronizer`
+- Server - `tsd`
+- Client - `tsc`
