@@ -337,11 +337,9 @@ class SNSServiceImpl final : public SNSService::Service {
 
         // If the stream is finished, we cannot write to it, exit the thread and join the parent thread
         if (!stream_finished) {
-          size_t counter = 0;
-          while (!vSNSPosts.empty() && counter < 20) {
+          while (!vSNSPosts.empty()) {
             stream->Write(*(vSNSPosts.end() - 1));
             vSNSPosts.pop_back();
-            counter++;
           }
         } else {
           break;
