@@ -479,6 +479,9 @@ void RunServer(std::string coordinator_ip, std::string coordinator_port,
     }
   }
 
+  // Start checking users early, before system check ends runs on the coordinator
+  std::thread tCheckUsersThread(&SNSFollowSyncImpl::CheckUsers, &Service);
+
   // Register the synchronizer
   grpc::ClientContext grpcHeartbeatContext;
   snsCoordinator::Heartbeat hb;
@@ -518,7 +521,6 @@ void RunServer(std::string coordinator_ip, std::string coordinator_port,
 
   // Start all the needed threads
   std::thread tHeartbeatThread(&SNSFollowSyncImpl::SendHeartbeat, &Service);
-  std::thread tCheckUsersThread(&SNSFollowSyncImpl::CheckUsers, &Service);
   std::thread tCheckFollowThread(&SNSFollowSyncImpl::CheckFollowing, &Service);
   std::thread tCheckTimelineThread(&SNSFollowSyncImpl::CheckTimeline, &Service);
   server->Wait();

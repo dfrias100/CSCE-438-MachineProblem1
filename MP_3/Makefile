@@ -44,6 +44,9 @@ clean:
 context-clean:
 	rm -f *.fg *.fl *.ls *.tl
 
+clean-no-remove-binary:
+	rm -f *.fg *.fl *.ls *.tl *.o *.pb.cc *.pb.h
+
 # The following is to test your system and ensure a smoother experience.
 # They are by no means necessary to actually compile a grpc-enabled software.
 
