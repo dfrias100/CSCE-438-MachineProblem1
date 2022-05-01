@@ -6,3 +6,4 @@ Current MPs:
 * MP1 - Chat Room Service
 * MP2 - TinySNS based on gRPC
 * MP3 - A Highly Scalable and Available Social Network Service
+* MP5 - MapReduce for Tweet Analysis
